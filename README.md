@@ -1,0 +1,1 @@
+Identification of tissue-restricted antigens (TRAs) described in an article by Nitta et al, entitiled “The fibroblast: an emerging key player in thymic T cell selection” (Immunological Reviews).  To define the TRAs, the Shannon entropy score was calculated using the gene expression profiles (GEO accession no. GSE10246).
