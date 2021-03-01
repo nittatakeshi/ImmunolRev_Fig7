@@ -1,0 +1,92 @@
+library(entropy)
+library("biomaRt")
+
+###Cell line data were excluded
+ex <- read.csv("GSE10246.csv")
+ex1 <- ex[,2:ncol(ex)]
+
+funML <- function(ex1){return(entropy(ex1,method="ML"))}
+ML <- apply(ex1,1,funML)
+
+matML <- matrix(ML, ncol=1)
+name <- as.matrix(ex$ID_REF)
+Result1 <- cbind(name, matML)
+write.csv(Result1, "Result1.csv")
+##########
+
+
+df <- read.csv("Result1.csv")
+probe <- df$V1
+probe <- as.character(probe)
+head(listMarts())
+db <- useMart("ensembl")
+head(listDatasets(db))
+mu <- useDataset("mmusculus_gene_ensembl", mart = db)
+head(listFilters(mu))
+head(listAttributes(mu))
+res <- getBM(attributes = c("ensembl_gene_id", "mgi_symbol","affy_mouse430_2"),
+             filters = "affy_mouse430_2", 
+             values = probe,
+             mart = mu)
+
+colnames(res) <- c("gene_ID", "gene_name","V1")
+res1 <- merge(df, res, by="V1", all=T)
+res2 <- res1[order(res1$V2),]
+res3 <- res2[!duplicated(res2$gene_ID), ]
+res4 <- na.omit(res3)
+colnames(res4) <-c("V1" ,"X" , "Entropy" ,   "Gene.ID", "gene_name")
+write.csv(res4, "20200518Entropy_ENSMUSG.csv")
+############
+
+Entropy <- read.csv("20200518Entropy_ENSMUSG.csv")
+dd <- read.csv("GSE147357_200313RNA-seq_RPKM_all.csv")
+M1 <- merge(Entropy, dd, by ="Gene.ID", all=T)
+M2 <- na.omit(M1)
+write.csv(M2, "20201213.result.csv")
+##############
+
+ddd <- read.csv("20201213.result.csv", stringsAsFactors = F)
+ddd1<- subset(ddd, Entropy < 3.5)
+
+col.list <- c("Gene.ID","WT_mFb_1" ,  "WT_mFb_2" ,"LTbRflox_mFb_1", "LTbRflox_mFb_2", "LTbRflox_mFb_3" ,"LTbRflox_mFb_4",
+"deltaFb_mFb_1", "deltaFb_mFb_2" ,"deltaFb_mFb_3" ,"deltaFb_mFb_4")
+
+ddd2 <- ddd1[, col.list]
+
+t <- (1:nrow(ddd2))
+
+fun1 <- function(i){
+  mean.Control.mFb <- rowMeans(ddd2[i,2:7])
+  return(mean.Control.mFb)
+}
+
+fun2 <- function(i){
+  mean.delta.mFb <- rowMeans(ddd2[i,8:11])
+  return(mean.delta.mFb)
+}
+
+mean.Control.mFb <- sapply(t, fun1)
+mean.Control.mFb <- as.matrix(mean.Control.mFb)
+                              
+mean.delta.mFb <- sapply(t, fun2)                      
+mean.delta.mFb <-as.matrix(mean.delta.mFb)  
+
+ddd3 <- cbind(ddd2, mean.Control.mFb ,mean.delta.mFb)
+
+ddd4<- subset(ddd3, mean.Control.mFb > 10)
+FC.LTbR.control.mFb <-ddd4$mean.delta.mFb/ddd4$mean.Control.mFb
+ddd5 <- cbind(ddd4, FC.LTbR.control.mFb)
+   
+k <-(1:nrow(ddd5))
+fun3 <- function(i) {
+  test <- t.test(x=ddd5[i,2:7],y=ddd5[i,8:11],alternative="t", var.equal=T, paired=F)
+  test.mFb <- test$p.value
+  return(test.mFb)
+}
+
+test.mFb <- sapply(k, fun3)
+ddd6 <- cbind(ddd5,test.mFb)
+
+down.TRAs <- subset(ddd6, FC.LTbR.control.mFb <0.5 &test.mFb <0.05)
+write.csv(red,"down.TRAs1.csv")
+
